@@ -1,0 +1,13 @@
+{
+  "total": 24071,
+  "train": 22868,
+  "eval": 1203,
+  "sources": {
+    "pippa": 13050,
+    "claude": 7500,
+    "saiga": 3521
+  },
+  "avg_tokens": 876.8676000166175,
+  "max_tokens": 6093,
+  "tokenizer": "Qwen/Qwen2.5-32B-Instruct"
+}

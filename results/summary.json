@@ -1,0 +1,10 @@
+{
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "duration_hours": 51.09002821279897,
+  "train_loss": 1.1972781240953998,
+  "eval_loss": 1.2071433067321777,
+  "perplexity": 3.343918445883007,
+  "peak_vram_gb": 33.40994304,
+  "trainable_params": 536870912,
+  "completed_at": "2026-05-03T13:41:44.294294"
+}

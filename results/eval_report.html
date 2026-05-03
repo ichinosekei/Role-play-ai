@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Evaluation Report</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, sans-serif; background:#faf9f6; color:#2c2c2a;
+       padding:2rem; line-height:1.6; max-width:1100px; margin:0 auto; }
+h1 { font-size:28px; font-weight:600; }
+h2 { font-size:20px; margin:2rem 0 1rem; border-bottom:1px solid #e5e3dd; padding-bottom:8px; }
+h3 { font-size:16px; margin:1.5rem 0 0.5rem; }
+.meta { color:#888; font-size:14px; }
+table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:14px; }
+th { background:#f1efe8; padding:8px; text-align:left; font-weight:500; font-size:12px;
+     text-transform:uppercase; }
+td { padding:8px; border-bottom:0.5px solid #e5e3dd; }
+.example { background:#fff; border-radius:8px; padding:1rem; margin:1rem 0;
+           border:0.5px solid #e5e3dd; }
+.user { background:#f0eee8; padding:8px 12px; border-radius:6px; margin:6px 0; font-size:14px; }
+.resp { background:#e1f5ee; padding:8px 12px; border-radius:6px; margin:6px 0; font-size:14px; }
+</style></head><body>
+
+<h1>Evaluation Report  model_final</h1>
+<div class="meta">2026-05-03T14:21:26.670016</div>
+
+<h2>Метрики</h2>
+
+    <h3>Group 1  Loss-based</h3>
+    <table>
+      <tr><th>Метрика</th><th>Значение</th><th>Цель</th></tr>
+      <tr><td>Perplexity (all)</td><td><strong style="color:#1D9E75">3.31</strong></td><td>5-12</td></tr>
+      <tr><td>Perplexity (EN)</td><td>3.240490371568553</td><td>5-12</td></tr>
+      <tr><td>Perplexity (RU)</td><td>3.58323435304844</td><td>5-15</td></tr>
+      <tr><td>Token accuracy</td><td>0.6782</td><td>&gt; 0.55</td></tr>
+    </table>
+
+    <h3>Group 2  Reference-based</h3>
+    <table>
+      <tr><th>Метрика</th><th>Значение</th><th>Цель</th></tr>
+      <tr><td>BLEU-4</td><td>11.20</td><td>&gt; 5</td></tr>
+      <tr><td>ROUGE-L</td><td>0.2151</td><td>&gt; 0.20</td></tr>
+      <tr><td>BERTScore F1</td><td><strong style="color:#1D9E75">0.8647</strong></td><td>&gt; 0.85</td></tr>
+      <tr><td>chrF++</td><td>31.01</td><td>&gt; 25</td></tr>
+    </table>
+
+    <h3>Group 3  Style match (Albert)</h3>
+    <table>
+      <tr><th>Метрика</th><th>Reference</th><th>Model</th><th>Diff</th></tr>
+    <tr><td>Avg word length</td><td>4.608</td><td>4.589</td><td>0.00</td></tr><tr><td>Avg sentence length</td><td>12.588</td><td>12.169</td><td>0.03</td></tr><tr><td>Commas / 100w</td><td>4.878</td><td>5.044</td><td>0.03</td></tr><tr><td>! / 100w</td><td>1.448</td><td>0.884</td><td>0.39</td></tr><tr><td>? / 100w</td><td>0.980</td><td>1.128</td><td>0.13</td></tr><tr><td>... / 100w</td><td>1.446</td><td>0.957</td><td>0.34</td></tr><tr><td>Emoji / 100w</td><td>0.136</td><td>0.150</td><td>0.10</td></tr><tr><td>*action* / 100w</td><td>1.667</td><td>0.991</td><td>0.41</td></tr><tr><td>Capitalized rate</td><td>0.133</td><td>0.119</td><td>0.10</td></tr>
+    </table>
+
+    <h3>Group 4  RP-specific</h3>
+    <table>
+      <tr><th>Метрика</th><th>Значение</th><th>Цель</th></tr>
+      <tr><td>Vocabulary overlap</td><td>0.9400</td><td>&gt; 0.55</td></tr>
+      <tr><td>Length JS-divergence</td><td>0.0378</td><td>&lt; 0.10</td></tr>
+      <tr><td>TTR (model)</td><td>0.3490</td><td>0.4-0.6</td></tr>
+      <tr><td>Avg distinct-2 (cross-sample)</td><td>0.9396</td><td>&gt; 0.7</td></tr>
+      <tr><td>Avg self-repetition</td><td>0.0000</td><td>&lt; 0.05</td></tr>
+    </table>
+
+    <h3>Group 5  Composite</h3>
+    <table>
+      <tr><th>Метрика</th><th>Значение</th><th>Цель</th></tr>
+      <tr><td><strong>Style Match Score</strong></td>
+          <td><strong style="color:#1D9E75">0.7984</strong></td>
+          <td>&gt; 0.7</td></tr>
+    </table>
+    
+
+<h2>Примеры RP-генераций (cross-sample diversity)</h2>
+
+        <div class="example">
+            <div class="meta">EN | distinct-2: 0.964</div>
+            <div class="user">User: *walks onto deck* Captain, imperials are catching up.</div>
+            <div class='resp'>I've got us out of the asteroid belt and on an intercept course with the planet's outer atmosphere, but I'm not sure we're going to outrun them. How many fighters do we have left?</div><div class='resp'>*captain turns around and pulls you into a hug* Don't worry! We'll outrun those Imperials! I know we can do it! *lets go of the hug* Alright, everyone to their stations! *walks to the front of the ship and takes the wheel* Prepare to jump to light speed! *ship jumps to lightspeed as the Imperials fire their weapons at the fleeing ship* Ha! They're nothing compared to my crew!</div><div class='resp'>I see. How close? *The Captain turns towards you and looks at your eyes, trying to judge whether this is a serious situation or not*</div>
+        </div>
+        <div class="example">
+            <div class="meta">RU | distinct-2: 0.917</div>
+            <div class="user">User: *сажусь за стойку* Налей чего-нибудь интересного.</div>
+            <div class='resp'>Я могу предложить кофе со вкусом темного шоколада, кофе с корицей и молотым имбирем или кофе с ванильным сиропом. *Лиза кладёт руки на стол и заглядывает тебе в глаза*. Что ты предпочитаешь?</div><div class='resp'>Вот мой топ-3:
+1. Капучино с вкусом темного шоколада
+2. Американо с корицей и молотым перцем (для острого привкуса)
+3. Черный кофе с лавандовым сиропом и жемчужными сливками
+
+Какой вариант ты выберешь?</div><div class='resp'>Что ты имеешь в виду под "интересным"? Может быть, наш фирменный кальян по-ирландски?</div>
+        </div>
+        <div class="example">
+            <div class="meta">EN | distinct-2: 0.917</div>
+            <div class="user">User: Old one, why do mortals fear death?</div>
+            <div class='resp'>Death is the final frontier of life, my friend. All creatures, mortal or not, fear the unknown. They fear what comes after. For what good is a life without purpose? To die would be to end that purpose. To cease being. To become nothing. A void in the world. A hole in time. Death is a great mystery, and all who know of it fear it.</div><div class='resp'>A question without a straightforward answer. Mortals fear death for many reasons: the unknown of what comes next; the pain that precedes it; the loss of loved ones and all they hold dear in this world. But I believe the root of their fear lies in their short time here. They know how precious life is because they have so little of it.</div><div class='resp'>Death is an unknown place, a dark and endless void of nothingness. To most mortals, the concept of no longer existing is frightening because they have not experienced it before. They are uncertain about what happens after their bodies expire, and what lies beyond the veil of life. This uncertainty causes anxiety and dread for many.</div>
+        </div>
+        <div class="example">
+            <div class="meta">EN | distinct-2: 0.961</div>
+            <div class="user">User: *sits at the bar* Tough day, Mira.</div>
+            <div class='resp'>*sighs and pours you an ale* I know the feeling. I've been running this place for twenty years, and it never gets any easier. But we push through. For our family, and our friends. *raises my mug* Here's to surviving another day.</div><div class='resp'>*smiles kindly* I'm sorry to hear that, dear. What can I get you?</div><div class='resp'>*sighs and pours you a mug of her best ale.* This one's on me. *She pats your shoulder.* I'm here if you need to talk, sweetie.</div>
+        </div>
+
+</body></html>
