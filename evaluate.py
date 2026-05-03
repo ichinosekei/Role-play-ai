@@ -19,6 +19,64 @@
 """
 
 import os
+import subprocess
+
+
+def _ensure_cuda_linker_for_triton():
+    """gcc -lcuda при сборке Triton launcher; без symlink линкер часто не видит libcuda."""
+    if os.environ.get("UNSLOTH_SKIP_CUDA_LINKER_FIX"):
+        return
+    try:
+        proc = subprocess.run(
+            ["ldconfig", "-p"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        libcuda_so1 = None
+        for line in proc.stdout.splitlines():
+            if "libcuda.so.1" in line:
+                libcuda_so1 = line.split()[-1]
+                break
+        if not libcuda_so1 or not os.path.isfile(libcuda_so1):
+            return
+        cuda_dir = os.path.dirname(libcuda_so1)
+        venv = os.environ.get("VIRTUAL_ENV")
+        if venv:
+            vlib = os.path.join(venv, "lib")
+            os.makedirs(vlib, exist_ok=True)
+            link = os.path.join(vlib, "libcuda.so")
+            try:
+                if os.path.lexists(link):
+                    os.unlink(link)
+                os.symlink(libcuda_so1, link)
+            except OSError:
+                pass
+
+        def merge_env(key):
+            sep = os.pathsep
+            parts = [cuda_dir]
+            if venv:
+                parts.append(os.path.join(venv, "lib"))
+            rest = os.environ.get(key, "")
+            if rest:
+                parts.extend(rest.split(sep))
+            seen = set()
+            out = []
+            for p in parts:
+                if p and p not in seen:
+                    seen.add(p)
+                    out.append(p)
+            os.environ[key] = sep.join(out)
+
+        merge_env("LD_LIBRARY_PATH")
+        merge_env("LIBRARY_PATH")
+    except Exception:
+        pass
+
+
+_ensure_cuda_linker_for_triton()
+
 import re
 import json
 import math
@@ -463,7 +521,16 @@ def style_match_score(ref_features, pred_features, length_js):
 
 def generate_html(results):
     def m(key, default=""):
-        v = results.get(key)
+        if "." in key:
+            v = results
+            for part in key.split("."):
+                if isinstance(v, dict):
+                    v = v.get(part)
+                else:
+                    v = None
+                    break
+        else:
+            v = results.get(key)
         if isinstance(v, float):
             return f"{v:.4f}" if abs(v) < 10 else f"{v:.2f}"
         return str(v) if v is not None else default
@@ -473,6 +540,7 @@ def generate_html(results):
 
     ppl = results.get("perplexity_overall", {}).get("perplexity")
     ppl_color = "#1D9E75" if ppl and ppl < 12 else "#D85A30" if ppl and ppl < 20 else "#E24B4A"
+    ppl_cell = f"{float(ppl):.2f}" if ppl is not None else ""
 
     bert = results.get("reference_metrics", {}).get("bertscore_f1")
     bert_color = "#1D9E75" if bert and bert > 0.85 else "#D85A30" if bert and bert > 0.75 else "#E24B4A"
@@ -481,7 +549,7 @@ def generate_html(results):
     <h3>Group 1  Loss-based</h3>
     <table>
       <tr><th>Метрика</th><th>Значение</th><th>Цель</th></tr>
-      <tr><td>Perplexity (all)</td><td><strong style="color:{ppl_color}">{ppl:.2f if ppl else ''}</strong></td><td>5-12</td></tr>
+      <tr><td>Perplexity (all)</td><td><strong style="color:{ppl_color}">{ppl_cell}</strong></td><td>5-12</td></tr>
       <tr><td>Perplexity (EN)</td><td>{results.get('perplexity_en', {}).get('perplexity', '')}</td><td>5-12</td></tr>
       <tr><td>Perplexity (RU)</td><td>{results.get('perplexity_ru', {}).get('perplexity', '')}</td><td>5-15</td></tr>
       <tr><td>Token accuracy</td><td>{m('token_accuracy')}</td><td>&gt; 0.55</td></tr>

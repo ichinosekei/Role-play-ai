@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from collections import Counter
 from datasets import load_dataset, Dataset
+from huggingface_hub import HfApi
 from transformers import AutoTokenizer
 
 random.seed(42)
@@ -25,6 +26,36 @@ TOKENIZER_NAME = "Qwen/Qwen2.5-32B-Instruct"
 
 print(f"Загружаем токенизатор {TOKENIZER_NAME}...")
 tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME, trust_remote_code=True)
+hf_api = HfApi()
+
+
+def load_hf_train(repo_id):
+    """
+    Load HF dataset train split with fallback for repos that used dataset scripts.
+    `datasets>=4` no longer supports script-only loading.
+    """
+    try:
+        return load_dataset(repo_id, split="train")
+    except RuntimeError as e:
+        if "Dataset scripts are no longer supported" not in str(e):
+            raise
+
+        repo_files = hf_api.list_repo_files(repo_id=repo_id, repo_type="dataset")
+        parquet_files = [p for p in repo_files if p.endswith(".parquet")]
+        if parquet_files:
+            print(f"   scripts unsupported -> parquet fallback ({len(parquet_files)} files)")
+            parquet_urls = [f"hf://datasets/{repo_id}/{p}" for p in parquet_files]
+            return load_dataset("parquet", data_files={"train": parquet_urls}, split="train")
+
+        json_files = [p for p in repo_files if p.endswith(".json") or p.endswith(".jsonl")]
+        if json_files:
+            print(f"   scripts unsupported -> json fallback ({len(json_files)} files)")
+            json_urls = [f"hf://datasets/{repo_id}/{p}" for p in json_files]
+            return load_dataset("json", data_files={"train": json_urls}, split="train")
+
+        raise RuntimeError(
+            f"{repo_id}: scripts unsupported and no parquet/json files found for fallback."
+        ) from e
 
 
 def to_chatml(messages):
@@ -55,7 +86,28 @@ def is_sfw(text, max_matches=2):
 
 def load_pippa(target_n):
     print(f"\n[1/4] PIPPA SFW (target: {target_n})")
-    ds = load_dataset("PygmalionAI/PIPPA", split="train")
+    try:
+        ds = load_dataset("PygmalionAI/PIPPA", split="train")
+    except RuntimeError as e:
+        if "Dataset scripts are no longer supported" not in str(e):
+            raise
+        # PIPPA repo contains mixed JSONL schemas; load compatible files only.
+        pippa_files = [
+            "hf://datasets/PygmalionAI/PIPPA/pippa_deduped.jsonl",
+            "hf://datasets/PygmalionAI/PIPPA/pippa.jsonl",
+        ]
+        ds = None
+        for file_url in pippa_files:
+            try:
+                ds = load_dataset("json", data_files={"train": file_url}, split="train")
+                print(f"   scripts unsupported -> json fallback ({Path(file_url).name})")
+                break
+            except Exception:
+                continue
+        if ds is None:
+            raise RuntimeError(
+                "PIPPA fallback failed: could not load compatible JSONL files."
+            ) from e
     print(f"  Сырых: {len(ds)}")
 
     samples, nsfw_skipped = [], 0
@@ -100,7 +152,7 @@ def load_pippa(target_n):
 def load_limarp(target_n):
     print(f"\n[2/4] LimaRP (target: {target_n})")
     try:
-        ds = load_dataset("lemonilia/LimaRP", split="train")
+        ds = load_hf_train("lemonilia/LimaRP")
     except Exception as e:
         print(f"   Недоступен: {e}. Берём больше из PIPPA")
         return load_pippa(target_n)
@@ -149,7 +201,7 @@ def load_limarp(target_n):
 
 def load_saiga(target_n):
     print(f"\n[3/4] Saiga RU (target: {target_n})")
-    ds = load_dataset("IlyaGusev/saiga_scored", split="train")
+    ds = load_hf_train("IlyaGusev/saiga_scored")
     print(f"  Сырых: {len(ds)}")
 
     SYS = ("Ты дружелюбный AI-собеседник. Отвечай естественно, "
@@ -188,7 +240,7 @@ def load_saiga(target_n):
 
 def load_claude(target_n):
     print(f"\n[4/4] Claude multiround (target: {target_n})")
-    ds = load_dataset("Norquinal/claude_multiround_chat_30k", split="train")
+    ds = load_hf_train("Norquinal/claude_multiround_chat_30k")
     print(f"  Сырых: {len(ds)}")
 
     SYS = "You are a helpful, knowledgeable, friendly assistant."

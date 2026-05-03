@@ -96,8 +96,9 @@ def main():
 
                  
     print("\n[4/6] Зависимости")
-    deps = ["torch", "transformers", "trl", "peft", "bitsandbytes", "datasets",
-            "accelerate", "unsloth", "tensorboard", "sacrebleu", "rouge_score",
+    # Unsloth should be imported before transformers/trl for patching.
+    deps = ["torch", "unsloth", "transformers", "trl", "peft", "bitsandbytes", "datasets",
+            "accelerate", "tensorboard", "sacrebleu", "rouge_score",
             "bert_score", "numpy"]
     for pkg in deps:
         try:
@@ -106,6 +107,9 @@ def main():
             check(pkg, True, ver)
         except ImportError:
             print(f"  {FAIL}  {pkg} не установлен")
+            all_ok = False
+        except Exception as e:
+            print(f"  {FAIL}  {pkg} ошибка импорта: {e}")
             all_ok = False
 
                  
@@ -136,6 +140,10 @@ def main():
         torch.cuda.empty_cache()
     except Exception as e:
         print(f"  {FAIL}  Ошибка: {e}")
+        if "-lcuda" in str(e) or "cannot find -lcuda" in str(e):
+            print("     Подсказка: линкер не видит libcuda.so.")
+            print("     Запусти `./setup.sh` заново (он создаёт symlink в venv/lib).")
+            print("     Либо вручную добавь путь драйвера в LD_LIBRARY_PATH/LIBRARY_PATH.")
         all_ok = False
 
            

@@ -60,9 +60,10 @@ class Config:
     max_grad_norm = 1.0
 
                    
-    eval_steps = 200
-    save_steps = 200
-    save_total_limit = 5
+    # Disk-safe defaults for smaller VM volumes.
+    eval_steps = 500
+    save_steps = 1000
+    save_total_limit = 2
     early_stopping_patience = 4
     early_stopping_threshold = 0.001
 
@@ -260,7 +261,7 @@ def main():
             report_to=cfg.report_to,
             eval_strategy="steps",
             eval_steps=cfg.eval_steps,
-            load_best_model_at_end=True,
+            load_best_model_at_end=False,
             metric_for_best_model="eval_loss",
             greater_is_better=False,
             save_strategy="steps",

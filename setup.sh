@@ -23,15 +23,31 @@ python3 -m venv ~/rp-venv
 source ~/rp-venv/bin/activate
 pip install --upgrade pip wheel
 
+# 2.1 CUDA linker fix for Triton/Unsloth runtime kernels (-lcuda)
+CUDA_LIB_SO1="$(ldconfig -p 2>/dev/null | awk '/libcuda\.so\.1/{print $NF; exit}')"
+if [ -n "$CUDA_LIB_SO1" ]; then
+  CUDA_LIB_DIR="$(dirname "$CUDA_LIB_SO1")"
+  ln -sf "$CUDA_LIB_SO1" "$VIRTUAL_ENV/lib/libcuda.so"
+  export LD_LIBRARY_PATH="$CUDA_LIB_DIR:$VIRTUAL_ENV/lib:${LD_LIBRARY_PATH:-}"
+  export LIBRARY_PATH="$CUDA_LIB_DIR:$VIRTUAL_ENV/lib:${LIBRARY_PATH:-}"
+  echo "  CUDA linker path: $CUDA_LIB_DIR"
+else
+  echo "  WARN: libcuda.so.1 не найден через ldconfig (Triton может упасть на -lcuda)."
+fi
+
 # 3. PyTorch + Unsloth
 echo ""
 echo "[3/4] PyTorch + Unsloth..."
-pip install -q torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-pip install -q "unsloth[cu121-torch250] @ git+https://github.com/unslothai/unsloth.git"
-pip install -q --no-deps trl peft accelerate bitsandbytes
+# Keep torch aligned with `cu121-torch250` dependency set.
+pip install -q torch==2.5.0 --index-url https://download.pytorch.org/whl/cu121
+# Use PyPI release line instead of git main to avoid ABI drift.
+pip install -q "unsloth[cu121-torch250]"
+# Avoid torchao import path on torch 2.5.x (it expects newer torch dtypes like int1).
+pip uninstall -y torchao >/dev/null 2>&1 || true
+pip install -q trl peft accelerate bitsandbytes
 pip install -q "datasets>=3.4.1" sentencepiece protobuf
 pip install -q huggingface_hub hf_transfer
-pip install -q "transformers>=4.46.0"
+pip install -q "transformers==4.51.3"
 
 # 4. Метрики (новые, для evaluate.py)
 echo ""
