@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Dataset Analytics</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, sans-serif; background:#faf9f6; color:#2c2c2a;
+       padding:2rem; line-height:1.5; max-width:1200px; margin:0 auto; }
+h1 { font-size:28px; font-weight:600; margin-bottom:8px; }
+h2 { font-size:20px; margin:2rem 0 1rem; padding-bottom:8px; border-bottom:1px solid #e5e3dd; }
+h3 { font-size:18px; margin-bottom:6px; }
+h4 { font-size:14px; margin:1rem 0 0.4rem; color:#5f5e5a; }
+.meta { font-size:13px; color:#888; margin-bottom:1rem; }
+table { width:100%; border-collapse:collapse; font-size:13px; margin:0.5rem 0; }
+th { background:#f1efe8; padding:8px; text-align:left; font-weight:500; font-size:11px;
+     text-transform:uppercase; }
+td { padding:8px; border-bottom:0.5px solid #e5e3dd; }
+.dataset-card { background:#fff; border-radius:10px; padding:1.5rem; margin:1rem 0;
+                 border:0.5px solid #e5e3dd; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+         gap:12px; margin:1rem 0; }
+.stat-block { background:#f8f7f4; padding:12px; border-radius:8px; }
+.stat-label { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.5px; }
+.stat-value { font-size:22px; font-weight:500; margin:4px 0; }
+.stat-detail { font-size:11px; color:#888; }
+.lang { font-size:13px; margin:8px 0; padding:6px 10px; background:#e8f0fb;
+        border-radius:6px; display:inline-block; }
+.vocab { font-size:13px; margin:8px 0; }
+.vocab code { background:#f0eee8; padding:1px 5px; border-radius:3px;
+              margin-right:3px; font-size:12px; }
+.ttr { font-size:13px; margin:8px 0; color:#5f5e5a; }
+.warn { background:#fff4e0; padding:10px 14px; border-radius:8px; margin:1rem 0;
+        border-left:3px solid #BA7517; font-size:13px; }
+</style></head><body>
+
+<h1>Dataset Analytics</h1>
+<div class="meta">Анализ 15000 диалогов из 3 датасетов</div>
+
+<div class="warn">
+<strong>Зачем это:</strong> понять что в каждом датасете — длины, словарь, стиль, язык, NSFW.
+Это нужно для (1) обоснования пропорций микса, (2) ablation studies (исключающего исследования),
+(3) предсказания на какой стиль будет смещаться модель.
+</div>
+
+<h2>Сравнительная таблица</h2>
+
+    <table>
+      <tr><th>Dataset</th><th>Dialogues</th><th>Tokens (med)</th><th>Turns (med)</th>
+          <th>Asst words/msg</th><th>*Action*</th><th>Emoji</th><th>NSFW</th><th>Languages</th></tr>
+    
+        <tr>
+          <td><strong>PIPPA</strong></td>
+          <td>5000</td>
+          <td>591</td>
+          <td>12</td>
+          <td>57</td>
+          <td>1.19</td>
+          <td>0.05</td>
+          <td style="">0.00</td>
+          <td>en: 99%</td>
+        </tr>
+        <tr>
+          <td><strong>saiga</strong></td>
+          <td>5000</td>
+          <td>622</td>
+          <td>1</td>
+          <td>0</td>
+          <td>0.00</td>
+          <td>0.00</td>
+          <td style="">0.00</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><strong>Claude_multiround</strong></td>
+          <td>5000</td>
+          <td>1058</td>
+          <td>6</td>
+          <td>202</td>
+          <td>0.04</td>
+          <td>0.00</td>
+          <td style="">0.00</td>
+          <td>en: 100%</td>
+        </tr></table>
+
+<h2>Детально по каждому датасету</h2>
+
+<div class="dataset-card">
+  <h3>PIPPA</h3>
+  <div class="meta">5000 диалогов · 110837 user / 120118 assistant</div>
+  
+  <div class="grid">
+    <div class="stat-block">
+      <div class="stat-label">Tokens/dialogue</div>
+      <div class="stat-value">591</div>
+      <div class="stat-detail">p25=266 · p75=2127 · max=309684</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Turns/dialogue</div>
+      <div class="stat-value">12</div>
+      <div class="stat-detail">p25=3 · p75=41</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Avg words / message</div>
+      <div class="stat-value">57</div>
+      <div class="stat-detail">user: 20 · asst: 57</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">*Action* RP markers (avg/msg)</div>
+      <div class="stat-value">1.19</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Emoji (avg/msg)</div>
+      <div class="stat-value">0.05</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">NSFW words (avg/msg)</div>
+      <div class="stat-value" style="color:#1D9E75">0.00</div>
+    </div>
+  </div>
+  
+  <div class="lang">Languages: en: 99%, short: 1%</div>
+  <div class="vocab"><strong>Top assistant words:</strong> <code>you</code>, <code>i</code>, <code>to</code>, <code>the</code>, <code>and</code>, <code>a</code>, <code>she</code>, <code>of</code>, <code>her</code>, <code>that</code>, <code>it</code>, <code>is</code>, <code>my</code>, <code>in</code>, <code>as</code>, <code>s</code>, <code>your</code>, <code>with</code>, <code>me</code>, <code>this</code></div>
+  <div class="ttr">TTR (richness): user=0.020 · assistant=0.006</div>
+</div>
+<div class="dataset-card">
+  <h3>saiga</h3>
+  <div class="meta">5000 диалогов · 10481 user / 0 assistant</div>
+  
+  <div class="grid">
+    <div class="stat-block">
+      <div class="stat-label">Tokens/dialogue</div>
+      <div class="stat-value">622</div>
+      <div class="stat-detail">p25=352 · p75=930 · max=39645</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Turns/dialogue</div>
+      <div class="stat-value">1</div>
+      <div class="stat-detail">p25=1 · p75=2</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Avg words / message</div>
+      <div class="stat-value">0</div>
+      <div class="stat-detail">user: 35 · asst: 0</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">*Action* RP markers (avg/msg)</div>
+      <div class="stat-value">0.00</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Emoji (avg/msg)</div>
+      <div class="stat-value">0.00</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">NSFW words (avg/msg)</div>
+      <div class="stat-value" style="color:#1D9E75">0.00</div>
+    </div>
+  </div>
+  
+  <div class="lang">Languages: </div>
+  <div class="vocab"><strong>Top assistant words:</strong> </div>
+  <div class="ttr">TTR (richness): user=0.156 · assistant=0.000</div>
+</div>
+<div class="dataset-card">
+  <h3>Claude_multiround</h3>
+  <div class="meta">5000 диалогов · 14972 user / 14921 assistant</div>
+  
+  <div class="grid">
+    <div class="stat-block">
+      <div class="stat-label">Tokens/dialogue</div>
+      <div class="stat-value">1058</div>
+      <div class="stat-detail">p25=868 · p75=1245 · max=2991</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Turns/dialogue</div>
+      <div class="stat-value">6</div>
+      <div class="stat-detail">p25=6 · p75=6</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Avg words / message</div>
+      <div class="stat-value">202</div>
+      <div class="stat-detail">user: 73 · asst: 202</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">*Action* RP markers (avg/msg)</div>
+      <div class="stat-value">0.04</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">Emoji (avg/msg)</div>
+      <div class="stat-value">0.00</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-label">NSFW words (avg/msg)</div>
+      <div class="stat-value" style="color:#1D9E75">0.00</div>
+    </div>
+  </div>
+  
+  <div class="lang">Languages: en: 100%</div>
+  <div class="vocab"><strong>Top assistant words:</strong> <code>the</code>, <code>and</code>, <code>of</code>, <code>to</code>, <code>a</code>, <code>in</code>, <code>that</code>, <code>for</code>, <code>with</code>, <code>s</code>, <code>as</code>, <code>is</code>, <code>on</code>, <code>i</code>, <code>this</code>, <code>from</code>, <code>by</code>, <code>an</code>, <code>their</code>, <code>through</code></div>
+  <div class="ttr">TTR (richness): user=0.026 · assistant=0.019</div>
+</div>
+
+<h2>Что делать с этими данными</h2>
+<div class="warn">
+<strong>Признаки которые надо учесть:</strong>
+<ul style="margin-left:1.2rem;margin-top:6px">
+  <li>Если в датасете много NSFW при SFW-цели — добавь жёсткий фильтр</li>
+  <li>Если средняя длина сильно различается — после микса модель будет копировать самый длинный</li>
+  <li>Если язык не совпадает с целевым — поменяй пропорции</li>
+  <li>Высокий *action* rate в assistant = narrative RP стиль (не casual)</li>
+</ul>
+</div>
+
+</body></html>
