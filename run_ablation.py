@@ -45,6 +45,7 @@ SMALL_MODEL = "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
 MAX_SEQ = 2048
 SAMPLES_PER_DATASET = 8000        # уменьшаем чтобы экспы были по 4-5 часов
 EPOCHS = 1                        # одной эпохи достаточно для сравнения
+SAFE_MAX_SEQ = 1536               # fallback для OOM/cuDNN
 
 ABLATIONS = [
     {"name": "exp_full",      "exclude": None,       "desc": "Полный микс (baseline)"},
@@ -53,6 +54,16 @@ ABLATIONS = [
     {"name": "exp_no_saiga",  "exclude": "saiga",    "desc": "Без saiga (русский)"},
     {"name": "exp_no_claude", "exclude": "claude",   "desc": "Без claude_multiround"},
 ]
+
+
+def _is_recoverable_runtime_error(exc: Exception) -> bool:
+    """Определяем ошибки, которые стоит перезапустить в safe-режиме."""
+    msg = str(exc).lower()
+    return (
+        "out of memory" in msg
+        or "cudnn frontend error" in msg
+        or "no execution plans support the graph" in msg
+    )
 
 
 # ═══════════════════════════════════════════════════════════
@@ -118,26 +129,8 @@ def run_one(ablation):
 
     start = time.time()
 
+    model = tokenizer = trainer = None
     try:
-        # 1. Модель
-        print(f"\n  Загружаем {SMALL_MODEL}...")
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=SMALL_MODEL,
-            max_seq_length=MAX_SEQ,
-            load_in_4bit=True,
-        )
-
-        # 2. LoRA (более скромная для скорости)
-        model = FastLanguageModel.get_peft_model(
-            model, r=32, lora_alpha=64, lora_dropout=0.05,
-            bias="none",
-            target_modules=["q_proj","k_proj","v_proj","o_proj",
-                          "gate_proj","up_proj","down_proj"],
-            use_gradient_checkpointing="unsloth",
-            random_state=42,
-        )
-        tokenizer = get_chat_template(tokenizer, chat_template="chatml")
-
         # 3. Данные с фильтрацией по источнику
         full_ds = load_from_disk("data/train_with_sources")
         if exclude:
@@ -151,75 +144,155 @@ def run_one(ablation):
         result["eval_samples"] = len(eval_ds)
         print(f"  Данные: {len(train_ds)} train / {len(eval_ds)} eval")
 
-        # 4. Тренер
-        eff_batch = 2 * 8  # batch=2, accum=8
-        steps_per_epoch = math.ceil(len(train_ds) / eff_batch)
-
-        trainer = SFTTrainer(
-            model=model, tokenizer=tokenizer,
-            train_dataset=train_ds, eval_dataset=eval_ds,
-            dataset_text_field="text",
-            max_seq_length=MAX_SEQ,
-            packing=True,
-            args=SFTConfig(
-                per_device_train_batch_size=2,
-                gradient_accumulation_steps=8,
-                num_train_epochs=EPOCHS,
-                learning_rate=2e-4,         # 7B можно повыше
-                warmup_steps=int(steps_per_epoch * 0.05),
-                weight_decay=0.01,
-                lr_scheduler_type="cosine",
-                optim="adamw_8bit",
-                bf16=True, tf32=True,
-                logging_steps=20,
-                logging_dir=str(exp_dir / "logs"),
-                report_to="tensorboard",
-                eval_strategy="steps",
-                eval_steps=200,
-                save_strategy="steps",
-                save_steps=400,
-                save_total_limit=1,
-                load_best_model_at_end=True,
-                metric_for_best_model="eval_loss",
-                greater_is_better=False,
-                output_dir=str(exp_dir / "ckpt"),
-                seed=42,
-                dataloader_num_workers=4,
-            ),
-            callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
-        )
-
-        # 5. Обучение
-        stats = trainer.train()
-        result["train_loss"] = stats.training_loss
-        result["peak_vram_gb"] = torch.cuda.max_memory_allocated() / 1e9
-
-        # 6. Финальная eval
-        eval_result = trainer.evaluate()
-        result["eval_loss"] = eval_result["eval_loss"]
-        result["perplexity"] = math.exp(eval_result["eval_loss"])
-
-        # Сохраняем LoRA
-        model.save_pretrained(str(exp_dir / "lora"))
-        tokenizer.save_pretrained(str(exp_dir / "lora"))
-
-        # История loss
-        log_history = trainer.state.log_history
-        result["train_loss_history"] = [
-            {"step": e["step"], "loss": e["loss"]}
-            for e in log_history if "loss" in e
-        ]
-        result["eval_loss_history"] = [
-            {"step": e["step"], "eval_loss": e["eval_loss"]}
-            for e in log_history if "eval_loss" in e
+        # Сначала нормальный режим, затем безопасный fallback при OOM/cuDNN.
+        attempts = [
+            {
+                "label": "default",
+                "max_seq": MAX_SEQ,
+                "per_device_train_batch_size": 1,
+                "gradient_accumulation_steps": 8,
+                "packing": False,
+                "dataloader_num_workers": 2,
+            },
+            {
+                "label": "safe-fallback",
+                "max_seq": SAFE_MAX_SEQ,
+                "per_device_train_batch_size": 1,
+                "gradient_accumulation_steps": 16,
+                "packing": False,
+                "dataloader_num_workers": 0,
+            },
         ]
 
-        result["status"] = "success"
-        result["duration_hours"] = (time.time() - start) / 3600
+        bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+        # cuDNN фронтенд иногда конфликтует с отдельными графами при fine-tune.
+        if hasattr(torch.backends.cuda, "enable_cudnn_sdp"):
+            torch.backends.cuda.enable_cudnn_sdp(False)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
 
-        print(f"  ✓ {name}: PPL={result['perplexity']:.2f}, "
-              f"VRAM={result['peak_vram_gb']:.1f}GB, "
-              f"time={result['duration_hours']:.1f}h")
+        last_error = None
+        for idx, cfg in enumerate(attempts, start=1):
+            try:
+                print(
+                    f"\n  Попытка {idx}/{len(attempts)}: {cfg['label']} "
+                    f"(seq={cfg['max_seq']}, batch={cfg['per_device_train_batch_size']}, "
+                    f"accum={cfg['gradient_accumulation_steps']}, packing={cfg['packing']})"
+                )
+                print(f"  Загружаем {SMALL_MODEL}...")
+                model, tokenizer = FastLanguageModel.from_pretrained(
+                    model_name=SMALL_MODEL,
+                    max_seq_length=cfg["max_seq"],
+                    load_in_4bit=True,
+                )
+
+                # 2. LoRA (более скромная для скорости)
+                model = FastLanguageModel.get_peft_model(
+                    model, r=32, lora_alpha=64, lora_dropout=0.05,
+                    bias="none",
+                    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                                    "gate_proj", "up_proj", "down_proj"],
+                    use_gradient_checkpointing="unsloth",
+                    random_state=42,
+                )
+                tokenizer = get_chat_template(tokenizer, chat_template="chatml")
+
+                # 4. Тренер
+                eff_batch = cfg["per_device_train_batch_size"] * cfg["gradient_accumulation_steps"]
+                steps_per_epoch = math.ceil(len(train_ds) / eff_batch)
+
+                trainer = SFTTrainer(
+                    model=model, tokenizer=tokenizer,
+                    train_dataset=train_ds, eval_dataset=eval_ds,
+                    dataset_text_field="text",
+                    max_seq_length=cfg["max_seq"],
+                    packing=cfg["packing"],
+                    args=SFTConfig(
+                        per_device_train_batch_size=cfg["per_device_train_batch_size"],
+                        gradient_accumulation_steps=cfg["gradient_accumulation_steps"],
+                        num_train_epochs=EPOCHS,
+                        learning_rate=2e-4,         # 7B можно повыше
+                        warmup_steps=max(10, int(steps_per_epoch * 0.05)),
+                        weight_decay=0.01,
+                        lr_scheduler_type="cosine",
+                        optim="adamw_8bit",
+                        bf16=bf16_ok,
+                        fp16=not bf16_ok,
+                        tf32=True,
+                        logging_steps=20,
+                        logging_dir=str(exp_dir / "logs"),
+                        report_to="tensorboard",
+                        eval_strategy="steps",
+                        eval_steps=200,
+                        save_strategy="steps",
+                        save_steps=400,
+                        save_total_limit=1,
+                        load_best_model_at_end=True,
+                        metric_for_best_model="eval_loss",
+                        greater_is_better=False,
+                        output_dir=str(exp_dir / "ckpt"),
+                        seed=42,
+                        dataloader_num_workers=cfg["dataloader_num_workers"],
+                    ),
+                    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+                )
+
+                # 5. Обучение
+                stats = trainer.train()
+                result["train_loss"] = stats.training_loss
+                result["peak_vram_gb"] = torch.cuda.max_memory_allocated() / 1e9
+
+                # 6. Финальная eval
+                eval_result = trainer.evaluate()
+                result["eval_loss"] = eval_result["eval_loss"]
+                result["perplexity"] = math.exp(eval_result["eval_loss"])
+
+                # Сохраняем LoRA
+                model.save_pretrained(str(exp_dir / "lora"))
+                tokenizer.save_pretrained(str(exp_dir / "lora"))
+
+                # История loss
+                log_history = trainer.state.log_history
+                result["train_loss_history"] = [
+                    {"step": e["step"], "loss": e["loss"]}
+                    for e in log_history if "loss" in e
+                ]
+                result["eval_loss_history"] = [
+                    {"step": e["step"], "eval_loss": e["eval_loss"]}
+                    for e in log_history if "eval_loss" in e
+                ]
+                result["run_mode"] = cfg["label"]
+                result["status"] = "success"
+                result["duration_hours"] = (time.time() - start) / 3600
+
+                print(f"  ✓ {name}: PPL={result['perplexity']:.2f}, "
+                      f"VRAM={result['peak_vram_gb']:.1f}GB, "
+                      f"time={result['duration_hours']:.1f}h")
+                break
+            except Exception as inner_e:
+                last_error = inner_e
+                print(f"  ✗ Попытка {cfg['label']} не удалась: {inner_e}")
+                should_retry = idx < len(attempts) and _is_recoverable_runtime_error(inner_e)
+                try:
+                    del trainer
+                except Exception:
+                    pass
+                try:
+                    del model, tokenizer
+                except Exception:
+                    pass
+                trainer = model = tokenizer = None
+                gc.collect()
+                torch.cuda.empty_cache()
+                if should_retry:
+                    time.sleep(10)
+                    continue
+                raise
+
+        if result["status"] != "success":
+            raise last_error if last_error is not None else RuntimeError("Training failed")
 
     except Exception as e:
         result["error"] = str(e)[:200]
