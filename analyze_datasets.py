@@ -1,21 +1,9 @@
-#!/usr/bin/env python3
 """
-═══════════════════════════════════════════════════════════════
-  DATASET ANALYTICS — детальный анализ каждого датасета
-═══════════════════════════════════════════════════════════════
+Небольшая аналитика по датасетам (в разрезе источников).
 
-Что считаем для каждого датасета отдельно:
-  • Базовая статистика: размер, кол-во диалогов
-  • Распределение длин (токены, слова, реплики)
-  • Языковое распределение (EN/RU/other)
-  • Стилевые фичи (как в evaluate.py): пунктуация, эмодзи, *actions*
-  • Vocabulary stats: TTR, top-50 слов
-  • Длина системных промптов
-  • Распределение количества турнов
-
-На выходе:
-  • results/dataset_analytics.json — данные
-  • results/dataset_analytics.html — визуальный отчёт со всеми датасетами рядом
+Выход:
+- results/dataset_analytics.json
+- results/dataset_analytics.html
 """
 
 import json
@@ -37,11 +25,6 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 print(f"Загружаем токенизатор...")
 tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME, trust_remote_code=True)
-
-
-# ═══════════════════════════════════════════════════════════
-#  ХЕЛПЕРЫ — те же что в evaluate.py
-# ═══════════════════════════════════════════════════════════
 
 EMOJI_RE = re.compile(
     "[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0001F600-\U0001F64F]+",
@@ -102,7 +85,6 @@ def aggregate_stats(stats_list):
     if not stats_list:
         return {}
 
-    # Численные поля
     numeric_keys = [k for k in stats_list[0] if isinstance(stats_list[0][k], (int, float))]
     agg = {}
     for k in numeric_keys:
@@ -119,7 +101,6 @@ def aggregate_stats(stats_list):
             "max": float(np.max(vals)),
         }
 
-    # Языки
     langs = Counter(s["lang"] for s in stats_list)
     total = sum(langs.values())
     agg["lang_distribution"] = {k: v / total for k, v in langs.items()}
@@ -142,11 +123,6 @@ def vocab_stats(texts, top_n=50):
         "top_50": counter.most_common(top_n),
     }
 
-
-# ═══════════════════════════════════════════════════════════
-#  ПАРСЕРЫ ДАТАСЕТОВ — извлекаем list[dialogue]
-#  где dialogue = list[message{role, content}]
-# ═══════════════════════════════════════════════════════════
 
 def parse_pippa(n_samples):
     print(f"  PIPPA: загружаем...")
@@ -248,15 +224,10 @@ def parse_claude(n_samples):
     return dialogues
 
 
-# ═══════════════════════════════════════════════════════════
-#  АНАЛИЗ ОДНОГО ДАТАСЕТА
-# ═══════════════════════════════════════════════════════════
-
 def analyze_dataset(name, dialogues):
     """Считает все метрики для одного датасета."""
     print(f"\n  Анализ {name} ({len(dialogues)} диалогов)...")
 
-    # Базовая статистика по диалогам
     n_turns_list = []
     n_tokens_total = []
     system_prompt_lens = []
@@ -265,22 +236,18 @@ def analyze_dataset(name, dialogues):
     all_messages = []
 
     for dlg in dialogues:
-        # Турны (исключая system)
         non_sys = [m for m in dlg if m["role"] in ("user", "assistant")]
         n_turns_list.append(len(non_sys))
 
-        # Токены всего диалога
         full_text = " ".join(m["content"] for m in dlg)
         n_tokens_total.append(
             len(tokenizer(full_text, truncation=False, add_special_tokens=False)["input_ids"])
         )
 
-        # System prompt length
         sys_msgs = [m for m in dlg if m["role"] == "system"]
         if sys_msgs:
             system_prompt_lens.append(len(sys_msgs[0]["content"].split()))
 
-        # Собираем по ролям
         for m in dlg:
             if m["role"] == "user":
                 user_messages.append(m["content"])
@@ -288,7 +255,6 @@ def analyze_dataset(name, dialogues):
                 assistant_messages.append(m["content"])
             all_messages.append(m["content"])
 
-    # Stats по сообщениям
     user_stats = [text_stats(t) for t in user_messages if text_stats(t)]
     assistant_stats = [text_stats(t) for t in assistant_messages if text_stats(t)]
 
@@ -322,10 +288,6 @@ def analyze_dataset(name, dialogues):
     }
 
 
-# ═══════════════════════════════════════════════════════════
-#  HTML ОТЧЁТ
-# ═══════════════════════════════════════════════════════════
-
 def fmt(v, prec=2):
     if isinstance(v, float):
         return f"{v:.{prec}f}"
@@ -336,7 +298,6 @@ def make_comparison_table(results, metric_path, label, prec=2):
     """Сравнительная таблица: одна метрика по всем датасетам."""
     rows = ""
     for r in results:
-        # navigate by dot-path
         v = r
         for k in metric_path.split("."):
             v = v.get(k, "—") if isinstance(v, dict) else "—"
@@ -500,10 +461,6 @@ td {{ padding:8px; border-bottom:0.5px solid #e5e3dd; }}
         f.write(html)
 
 
-# ═══════════════════════════════════════════════════════════
-#  MAIN
-# ═══════════════════════════════════════════════════════════
-
 def main():
     print("═" * 60)
     print(f"  DATASET ANALYTICS (sample {SAMPLE_SIZE} from each)")
@@ -530,14 +487,11 @@ def main():
             print(f"  ✗ Ошибка: {e}")
             continue
 
-    # JSON
     with open(OUTPUT_DIR / "dataset_analytics.json", "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False, default=str)
 
-    # HTML
     generate_html(results)
 
-    # Краткая сводка в консоль
     print("\n" + "═" * 60)
     print("  СВОДКА")
     print("═" * 60)

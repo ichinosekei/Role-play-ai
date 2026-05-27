@@ -1,8 +1,6 @@
                       
 """
-PRE-FLIGHT CHECK  Qwen2.5-32B-Instruct + лимиты ментора (60GB VRAM, 120GB RAM)
-
-Запуск: python preflight_check.py
+Быстрая проверка окружения перед запуском обучения/оценки.
 """
 
 import sys
@@ -96,7 +94,6 @@ def main():
 
                  
     print("\n[4/6] Зависимости")
-    # Unsloth should be imported before transformers/trl for patching.
     deps = ["torch", "unsloth", "transformers", "trl", "peft", "bitsandbytes", "datasets",
             "accelerate", "tensorboard", "sacrebleu", "rouge_score",
             "bert_score", "numpy"]

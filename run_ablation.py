@@ -1,24 +1,7 @@
 #!/usr/bin/env python3
 """
-═══════════════════════════════════════════════════════════════
-  ABLATION STUDY — исключающее исследование
-═══════════════════════════════════════════════════════════════
-
-Идея: запускаем 5 экспериментов на МАЛЕНЬКОЙ модели Qwen2.5-7B,
-каждый раз исключая один датасет. Так понимаем, какой реально
-влияет на качество.
-
-Эксперименты:
-  exp_full      — весь микс (baseline)
-  exp_no_pippa  — без PIPPA (без character RP)
-  exp_no_limarp — без LimaRP (без curated RP)
-  exp_no_saiga  — без saiga (без русского)
-  exp_no_claude — без claude (без качественного диалога)
-
-Каждый: 7B, QLoRA r=32, seq=2048, 1 эпоха = ~4-5 часов
-Итого: ~22-25 часов
-
-После запуска: results/ablation_report.html со сравнением метрик
+Исключающее исследование: 5 экспериментов на Qwen2.5-7B, каждый раз
+исключая один источник данных. После прогона — `results/ablation_report.html`.
 """
 
 import os
@@ -36,10 +19,6 @@ from unsloth.chat_templates import get_chat_template
 from trl import SFTTrainer, SFTConfig
 from transformers import EarlyStoppingCallback
 
-
-# ═══════════════════════════════════════════════════════════
-#  КОНФИГ
-# ═══════════════════════════════════════════════════════════
 
 SMALL_MODEL = "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
 MAX_SEQ = 2048
@@ -66,10 +45,6 @@ def _is_recoverable_runtime_error(exc: Exception) -> bool:
     )
 
 
-# ═══════════════════════════════════════════════════════════
-#  ПОДГОТОВКА — пересобираем датасет с метками источника
-# ═══════════════════════════════════════════════════════════
-
 def prepare_data_with_sources():
     """Готовит датасет, помеченный источником каждого примера."""
     sources_path = Path("data/train_with_sources")
@@ -78,14 +53,12 @@ def prepare_data_with_sources():
         return
 
     print("Готовим данные с метками источников...")
-    # Импортируем функции из prepare_dataset.py
     sys.path.insert(0, str(Path(__file__).parent))
     from prepare_dataset import (
         load_pippa, load_limarp, load_saiga, load_claude,
         OUTPUT_DIR, MIX_RATIOS,
     )
 
-    # Берём ограниченную выборку для ablation
     targets = {
         "pippa":  SAMPLES_PER_DATASET,
         "limarp": SAMPLES_PER_DATASET,
@@ -108,10 +81,6 @@ def prepare_data_with_sources():
     print(f"  Сохранено: {len(ds)} примеров с метками источника")
 
 
-# ═══════════════════════════════════════════════════════════
-#  ЗАПУСК ОДНОГО АБЛЕЙШН-ЭКСПА
-# ═══════════════════════════════════════════════════════════
-
 def run_one(ablation):
     name = ablation["name"]
     exclude = ablation["exclude"]
@@ -131,12 +100,10 @@ def run_one(ablation):
 
     model = tokenizer = trainer = None
     try:
-        # 3. Данные с фильтрацией по источнику
         full_ds = load_from_disk("data/train_with_sources")
         if exclude:
             full_ds = full_ds.filter(lambda x: x["source"] != exclude)
 
-        # Train/eval split
         splits = full_ds.train_test_split(test_size=0.05, seed=42)
         train_ds = splits["train"]
         eval_ds = splits["test"]
@@ -144,7 +111,6 @@ def run_one(ablation):
         result["eval_samples"] = len(eval_ds)
         print(f"  Данные: {len(train_ds)} train / {len(eval_ds)} eval")
 
-        # Сначала нормальный режим, затем безопасный fallback при OOM/cuDNN.
         attempts = [
             {
                 "label": "default",
@@ -165,7 +131,6 @@ def run_one(ablation):
         ]
 
         bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-        # cuDNN фронтенд иногда конфликтует с отдельными графами при fine-tune.
         if hasattr(torch.backends.cuda, "enable_cudnn_sdp"):
             torch.backends.cuda.enable_cudnn_sdp(False)
         torch.backends.cudnn.benchmark = False
@@ -188,7 +153,6 @@ def run_one(ablation):
                     load_in_4bit=True,
                 )
 
-                # 2. LoRA (более скромная для скорости)
                 model = FastLanguageModel.get_peft_model(
                     model, r=32, lora_alpha=64, lora_dropout=0.05,
                     bias="none",
@@ -199,7 +163,6 @@ def run_one(ablation):
                 )
                 tokenizer = get_chat_template(tokenizer, chat_template="chatml")
 
-                # 4. Тренер
                 eff_batch = cfg["per_device_train_batch_size"] * cfg["gradient_accumulation_steps"]
                 steps_per_epoch = math.ceil(len(train_ds) / eff_batch)
 
@@ -213,7 +176,7 @@ def run_one(ablation):
                         per_device_train_batch_size=cfg["per_device_train_batch_size"],
                         gradient_accumulation_steps=cfg["gradient_accumulation_steps"],
                         num_train_epochs=EPOCHS,
-                        learning_rate=2e-4,         # 7B можно повыше
+                        learning_rate=2e-4,
                         warmup_steps=max(10, int(steps_per_epoch * 0.05)),
                         weight_decay=0.01,
                         lr_scheduler_type="cosine",
@@ -239,21 +202,17 @@ def run_one(ablation):
                     callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
                 )
 
-                # 5. Обучение
                 stats = trainer.train()
                 result["train_loss"] = stats.training_loss
                 result["peak_vram_gb"] = torch.cuda.max_memory_allocated() / 1e9
 
-                # 6. Финальная eval
                 eval_result = trainer.evaluate()
                 result["eval_loss"] = eval_result["eval_loss"]
                 result["perplexity"] = math.exp(eval_result["eval_loss"])
 
-                # Сохраняем LoRA
                 model.save_pretrained(str(exp_dir / "lora"))
                 tokenizer.save_pretrained(str(exp_dir / "lora"))
 
-                # История loss
                 log_history = trainer.state.log_history
                 result["train_loss_history"] = [
                     {"step": e["step"], "loss": e["loss"]}
@@ -308,16 +267,11 @@ def run_one(ablation):
         torch.cuda.empty_cache()
         time.sleep(5)
 
-    # Сохраняем результат
     with open(exp_dir / "result.json", "w") as f:
         json.dump(result, f, indent=2, default=str)
 
     return result
 
-
-# ═══════════════════════════════════════════════════════════
-#  HTML ОТЧЁТ
-# ═══════════════════════════════════════════════════════════
 
 def generate_report(all_results):
     successful = [r for r in all_results if r["status"] == "success"]
@@ -326,14 +280,12 @@ def generate_report(all_results):
         print("Нет успешных экспериментов")
         return
 
-    # Baseline = exp_full
     baseline = next((r for r in successful if r["name"] == "exp_full"), None)
 
     rows = ""
     for r in all_results:
         if r["status"] == "success":
             ppl = r["perplexity"]
-            # Дельта vs baseline
             if baseline and r["name"] != "exp_full":
                 delta = ppl - baseline["perplexity"]
                 delta_pct = 100 * delta / baseline["perplexity"]
@@ -365,7 +317,6 @@ def generate_report(all_results):
                 <td>—</td>
             </tr>"""
 
-    # Чарт с loss curves
     chart_data = {}
     for r in successful:
         chart_data[r["name"]] = {
@@ -373,7 +324,6 @@ def generate_report(all_results):
             "eval": [(e["step"], e["eval_loss"]) for e in r.get("eval_loss_history", [])],
         }
 
-    # Recommendations
     if baseline:
         recs = []
         for r in successful:
@@ -481,10 +431,6 @@ new Chart(document.getElementById('lossChart'), {{
         f.write(html)
 
 
-# ═══════════════════════════════════════════════════════════
-#  MAIN
-# ═══════════════════════════════════════════════════════════
-
 def main():
     start = datetime.now()
     print("═" * 60)
@@ -494,10 +440,8 @@ def main():
     print(f"  Ожидаемое время: ~{4*len(ABLATIONS)}-{5*len(ABLATIONS)} часов")
     print("═" * 60)
 
-    # 1. Готовим данные с метками
     prepare_data_with_sources()
 
-    # 2. Запускаем все эксперименты
     all_results = []
     for i, ab in enumerate(ABLATIONS):
         print(f"\n{'─' * 60}")
@@ -506,19 +450,16 @@ def main():
         r = run_one(ab)
         all_results.append(r)
 
-        # Сохраняем после каждого
         Path("results").mkdir(exist_ok=True)
         with open("results/ablation_results.json", "w") as f:
             json.dump(all_results, f, indent=2, default=str)
 
-        # Промежуточный отчёт
         generate_report(all_results)
 
         elapsed = datetime.now() - start
         remaining = len(ABLATIONS) - i - 1
         print(f"\nПрошло: {elapsed}, осталось ~{remaining}")
 
-    # Финал
     end = datetime.now()
     total = end - start
     successful = [r for r in all_results if r["status"] == "success"]

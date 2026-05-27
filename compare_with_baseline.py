@@ -1,38 +1,14 @@
-#!/usr/bin/env python3
 """
-═══════════════════════════════════════════════════════════════
-  COMPARE WITH BASELINE — сравнение с Qwen2.5-32B без LoRA
-═══════════════════════════════════════════════════════════════
+Сравнение базовой `Qwen/Qwen2.5-32B-Instruct` и дообученной модели (LoRA).
 
-ВНИМАНИЕ: требует A100 80GB (или 40GB).
-На RTX 4060 Ti 8GB НЕ запустится — 32B-модель не влезет.
+Требует много VRAM (в идеале A100 40–80GB).
 
-Где запускать (по простоте):
-  1. RunPod (~$0.5-1/час): https://www.runpod.io/ → Spot A100
-  2. vast.ai (~$0.3-0.5/час): https://vast.ai
-  3. Yandex DataSphere (A100 за рубли)
-  4. Google Colab Pro+ (иногда даёт A100)
-
-Время работы: 30-40 минут на A100.
-
-Кастомный HF cache (если на диске мало места в home):
-    export HF_HOME=/mnt/data/hf_cache
-    export TRANSFORMERS_CACHE=/mnt/data/hf_cache
-    python compare_with_baseline.py
-
-Использование:
-    python compare_with_baseline.py
+Если нужно вынести HF cache:
+  export HF_HOME=/mnt/data/hf_cache
+  export TRANSFORMERS_CACHE=/mnt/data/hf_cache
 """
 
 import os
-
-# ═══════════════════════════════════════════════════════════
-#  Настройка путей кеша (если нужно поменять)
-# ═══════════════════════════════════════════════════════════
-# Раскомментируй и поменяй пути если HF cache съедает диск C/home:
-# os.environ["HF_HOME"] = "/mnt/data/hf_cache"
-# os.environ["TRANSFORMERS_CACHE"] = "/mnt/data/hf_cache"
-# os.environ["HF_DATASETS_CACHE"] = "/mnt/data/hf_cache/datasets"
 
 import json
 import math
@@ -41,7 +17,6 @@ import gc
 from pathlib import Path
 import torch
 
-# Используем функции из evaluate.py
 sys.path.insert(0, ".")
 from evaluate import (
     perplexity,
@@ -79,7 +54,6 @@ def evaluate_model(model_name, save_path, max_seq=4096):
 
     results = {"model_name": model_name}
 
-    # Group 1
     print("\n[1/5] Perplexity...")
     results["perplexity_overall"] = perplexity(model, tokenizer, eval_ds, max_n=300)
     results["perplexity_en"] = perplexity(model, tokenizer, eval_ds, max_n=200, lang_filter="en")
@@ -87,7 +61,6 @@ def evaluate_model(model_name, save_path, max_seq=4096):
     if results["perplexity_overall"]:
         print(f"  PPL all: {results['perplexity_overall'].get('perplexity', '—'):.2f}")
 
-    # Group 2
     print("\n[2/5] BLEU/ROUGE/BERTScore/chrF++...")
     out = reference_metrics(model, tokenizer, eval_ds, n=100)
     if isinstance(out, tuple) and len(out) == 3:
@@ -102,14 +75,12 @@ def evaluate_model(model_name, save_path, max_seq=4096):
         print(f"  chrF++: {ref_metrics.get('chrf++', 0):.2f}")
         print(f"  ROUGE-L: {ref_metrics.get('rouge_l', 0):.4f}")
 
-    # Group 3
     print("\n[3/5] Style features...")
     ref_features = [text_features(r) for r in refs if text_features(r)]
     pred_features = [text_features(p) for p in preds if text_features(p)]
     results["reference_features"] = aggregate_features(ref_features)
     results["model_features"] = aggregate_features(pred_features)
 
-    # Group 4
     print("\n[4/5] Length/vocab match + diversity...")
     results["length_js"] = length_distribution_match(refs, preds)
     results["vocab_overlap"] = vocabulary_overlap(refs, preds)
@@ -121,7 +92,6 @@ def evaluate_model(model_name, save_path, max_seq=4096):
         results["avg_self_rep"] = float(np.mean([s["self_rep"] for s in rp_samples]))
         print(f"  Distinct-2: {results['avg_distinct_2']:.4f}")
 
-    # Group 5
     print("\n[5/5] Style Match Score...")
     results["style_match_score"] = style_match_score(
         results["reference_features"],
@@ -131,11 +101,9 @@ def evaluate_model(model_name, save_path, max_seq=4096):
     if results["style_match_score"]:
         print(f"  Style Match: {results['style_match_score']:.4f}")
 
-    # Save
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False, default=str)
 
-    # Cleanup
     del model, tokenizer
     torch.cuda.empty_cache()
     gc.collect()
@@ -146,18 +114,15 @@ def evaluate_model(model_name, save_path, max_seq=4096):
 def main():
     Path("results").mkdir(exist_ok=True)
 
-    # 1. Базовая модель БЕЗ LoRA
     print("Оцениваем базовую Qwen2.5-32B-Instruct (без файнтюна)...")
     base_results = evaluate_model(
         "Qwen/Qwen2.5-32B-Instruct",
         "results/eval_baseline.json"
     )
 
-    # 2. Берём готовые результаты нашей модели
     with open("results/eval_full.json", encoding="utf-8") as f:
         our_results = json.load(f)
 
-    # 3. Сравнительная таблица
     print(f"\n{'='*60}")
     print("  СРАВНЕНИЕ: Base Qwen vs Наша модель")
     print(f"{'='*60}")
@@ -208,7 +173,6 @@ def main():
         print(f"{name:<18} {bv:>10.4f} {ov:>10.4f} {delta:>+10.4f}({delta_pct:+5.1f}%) {better}")
         rows.append((name, bv, ov, delta, delta_pct, direction))
 
-    # 4. Сохраняем
     with open("results/comparison_base_vs_ours.json", "w", encoding="utf-8") as f:
         json.dump({"base": base_results, "ours": our_results,
                    "comparison": [{"metric": r[0], "base": r[1], "ours": r[2],
@@ -216,7 +180,6 @@ def main():
                                    "direction": r[5]} for r in rows]},
                   f, indent=2, default=str, ensure_ascii=False)
 
-    # 5. LaTeX-таблица для прямой вставки в отчёт
     latex = "\\begin{table}[tbh!]\n\\begin{center}\n\\begin{tabular}{|l|cc|c|}\n\\hline\n"
     latex += "Метрика & Base Qwen2.5-32B & Наша модель & $\\Delta$ \\\\\n\\hline\n"
     for name, bv, ov, delta, delta_pct, direction in rows:

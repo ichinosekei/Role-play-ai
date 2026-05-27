@@ -1,21 +1,6 @@
                       
 """
-
-  EVALUATE  расширенный набор метрик
-
-
-5 групп метрик (~20 показателей):
-
-[1] Loss-based:        Perplexity, EN-PPL, RU-PPL, Token accuracy
-[2] Reference-based:   BLEU-4, ROUGE-L, BERTScore F1, chrF++
-[3] Style (Albert):    Length JS-div, Vocab overlap, Punct match,
-                       Emoji rate, *Action* rate, Caps rate
-[4] RP-specific:       Persona consistency (NLI), Self-repetition,
-                       Distinct-N, Turn coherence
-[5] Distribution:      Style Match Score (composite), TTR
-
-Зависимости:
-    pip install sacrebleu rouge-score bert_score nltk
+Оценка модели (набор метрик + HTML отчёт).
 """
 
 import os
@@ -23,7 +8,7 @@ import subprocess
 
 
 def _ensure_cuda_linker_for_triton():
-    """gcc -lcuda при сборке Triton launcher; без symlink линкер часто не видит libcuda."""
+    """Фикс для окружений, где линкер не видит `-lcuda` при сборке Triton."""
     if os.environ.get("UNSLOTH_SKIP_CUDA_LINKER_FIX"):
         return
     try:
@@ -99,10 +84,6 @@ N_GEN_SAMPLES = 100
 N_PER_PROMPT = 5                                 
 
 
-                                                             
-                              
-                                                             
-
 CASUAL = [
     {"lang": "en", "system": "You are a friendly assistant chatting casually.",
      "user": "Hey, I had a rough day. Cheer me up?"},
@@ -130,10 +111,6 @@ RP = [
 ]
 
 
-                                                             
-                      
-                                                             
-
 def perplexity(model, tokenizer, dataset, max_n=300, lang_filter=None):
     model.eval()
     total_loss, total_tokens = 0.0, 0
@@ -142,7 +119,6 @@ def perplexity(model, tokenizer, dataset, max_n=300, lang_filter=None):
     with torch.no_grad():
         for i in range(min(max_n, len(dataset))):
             text = dataset[i]["text"]
-                                                     
             cyr_ratio = sum(1 for c in text if 'а' <= c.lower() <= 'я') / max(len(text), 1)
             is_ru = cyr_ratio > 0.3
             if lang_filter == "ru" and not is_ru:
@@ -165,7 +141,6 @@ def perplexity(model, tokenizer, dataset, max_n=300, lang_filter=None):
 
 
 def token_accuracy(model, tokenizer, dataset, max_n=100):
-    """Точность предсказания следующего токена."""
     model.eval()
     correct, total = 0, 0
     with torch.no_grad():
@@ -181,12 +156,7 @@ def token_accuracy(model, tokenizer, dataset, max_n=100):
     return correct / total if total > 0 else 0
 
 
-                                                             
-                           
-                                                             
-
 def split_last_response(text, tokenizer):
-    """Разделяет последний турн assistant как reference."""
     parts = text.split("<|im_start|>assistant\n")
     if len(parts) < 2:
         return None, None
@@ -211,7 +181,6 @@ def gen(model, tokenizer, prompt, max_new=200):
 
 
 def reference_metrics(model, tokenizer, dataset, n=N_GEN_SAMPLES):
-    """Генерируем ответы и сравниваем с reference через BLEU/ROUGE/BERTScore/chrF++."""
     print(f"  Генерация {n} ответов для reference-метрик...")
     FastLanguageModel.for_inference(model)
 
@@ -235,7 +204,6 @@ def reference_metrics(model, tokenizer, dataset, n=N_GEN_SAMPLES):
 
     out = {"n_pairs": len(refs)}
 
-          
     try:
         import sacrebleu
         bleu = sacrebleu.corpus_bleu(preds, [refs])
@@ -243,7 +211,6 @@ def reference_metrics(model, tokenizer, dataset, n=N_GEN_SAMPLES):
     except Exception as e:
         print(f"    BLEU failed: {e}")
 
-            
     try:
         import sacrebleu
         chrf = sacrebleu.corpus_chrf(preds, [refs], word_order=2)
@@ -251,7 +218,6 @@ def reference_metrics(model, tokenizer, dataset, n=N_GEN_SAMPLES):
     except Exception as e:
         print(f"    chrF++ failed: {e}")
 
-             
     try:
         from rouge_score import rouge_scorer
         scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
@@ -260,7 +226,6 @@ def reference_metrics(model, tokenizer, dataset, n=N_GEN_SAMPLES):
     except Exception as e:
         print(f"    ROUGE failed: {e}")
 
-               
     try:
         from bert_score import score as bs
         P, R, F1 = bs(preds, refs, lang="en", verbose=False)
@@ -272,10 +237,6 @@ def reference_metrics(model, tokenizer, dataset, n=N_GEN_SAMPLES):
 
     return out, refs, preds
 
-
-                                                             
-                                  
-                                                             
 
 EMOJI_RE = re.compile(
     "["
@@ -289,7 +250,6 @@ ACTION_RE = re.compile(r'\*[^*]{2,80}\*')
 
 
 def text_features(text):
-    """Извлекает стилевые фичи из текста."""
     if not text:
         return None
 
@@ -297,20 +257,17 @@ def text_features(text):
     sentences = re.split(r'[.!?]+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
 
-             
     n_chars = len(text)
     n_words = len(words)
     n_sent = max(len(sentences), 1)
     avg_word_len = sum(len(w) for w in words) / max(n_words, 1)
     avg_sent_len = n_words / n_sent
 
-             
     caps_words = sum(1 for w in words if w and w[0].isupper())
     all_lower = sum(1 for w in words if w.islower() and len(w) > 1)
     caps_rate = caps_words / max(n_words, 1)
     lower_rate = all_lower / max(n_words, 1)
 
-                
     n_periods = text.count('.')
     n_commas = text.count(',')
     n_exclaim = text.count('!')
@@ -319,7 +276,6 @@ def text_features(text):
     n_ellipsis = text.count('...')
     period_rate = n_periods / max(n_sent, 1)
 
-                         
     n_emoji = len(EMOJI_RE.findall(text))
     n_actions = len(ACTION_RE.findall(text))
     emoji_rate = n_emoji / max(n_words, 1) * 100                   
@@ -342,7 +298,6 @@ def text_features(text):
 
 
 def aggregate_features(features_list):
-    """Усредняет фичи по списку текстов с p25/p50/p75."""
     if not features_list:
         return {}
     keys = features_list[0].keys()
@@ -359,7 +314,6 @@ def aggregate_features(features_list):
 
 
 def js_divergence(p, q, eps=1e-10):
-    """Jensen-Shannon divergence для нормализованных распределений."""
     p = np.array(p) + eps
     q = np.array(q) + eps
     p /= p.sum()
@@ -369,7 +323,6 @@ def js_divergence(p, q, eps=1e-10):
 
 
 def length_distribution_match(refs, preds, bins=20):
-    """JS-divergence распределений длин ответов модели vs reference."""
     ref_lens = [len(r.split()) for r in refs]
     pred_lens = [len(p.split()) for p in preds]
     if not ref_lens or not pred_lens:
@@ -383,7 +336,6 @@ def length_distribution_match(refs, preds, bins=20):
 
 
 def vocabulary_overlap(refs, preds, top_n=200):
-    """Доля топ-N слов из reference, которые присутствуют в predictions."""
     ref_words = []
     pred_words = []
     for r in refs:
@@ -399,7 +351,6 @@ def vocabulary_overlap(refs, preds, top_n=200):
 
 
 def type_token_ratio(texts):
-    """TTR: vocabulary richness."""
     all_words = []
     for t in texts:
         all_words.extend(re.findall(r'\w+', t.lower()))
@@ -408,12 +359,7 @@ def type_token_ratio(texts):
     return len(set(all_words)) / len(all_words)
 
 
-                                                             
-                       
-                                                             
-
 def self_repetition_rate(text, n=4):
-    """Доля повторяющихся n-грамм внутри одного ответа."""
     words = text.split()
     if len(words) < n + 1:
         return 0
@@ -426,7 +372,6 @@ def self_repetition_rate(text, n=4):
 
 
 def distinct_n(texts, n=2):
-    """Distinct-N: разнообразие n-грамм между разными генерациями."""
     all_ngrams = []
     for t in texts:
         words = t.split()
@@ -438,7 +383,6 @@ def distinct_n(texts, n=2):
 
 
 def cross_sample_diversity(model, tokenizer, prompts, n_per=N_PER_PROMPT):
-    """Генерируем N раз тот же промпт  считаем distinct-N."""
     print(f"  Cross-sample diversity ({len(prompts)} промптов  {n_per} samples)...")
     FastLanguageModel.for_inference(model)
     all_results = []
@@ -473,10 +417,6 @@ def cross_sample_diversity(model, tokenizer, prompts, n_per=N_PER_PROMPT):
     return all_results
 
 
-                                                             
-                                       
-                                                             
-
 def style_match_score(ref_features, pred_features, length_js):
     """
     Композитный балл: насколько модель пишет в стиле reference.
@@ -508,16 +448,11 @@ def style_match_score(ref_features, pred_features, length_js):
     style_diff = np.mean(diffs)
     style_score = 1.0 - style_diff
 
-                               
     if length_js is not None:
         style_score *= (1.0 - min(length_js, 0.5))
 
     return float(max(0, style_score))
 
-
-                                                             
-             
-                                                             
 
 def generate_html(results):
     def m(key, default=""):
@@ -610,7 +545,6 @@ def generate_html(results):
     </table>
     """
 
-             
     examples_html = ""
     for r in results.get("rp_samples", []):
         responses_html = "".join(
@@ -660,12 +594,7 @@ td {{ padding:8px; border-bottom:0.5px solid #e5e3dd; }}
     print(f"\n HTML: {RESULTS_DIR / 'eval_report.html'}")
 
 
-                                                             
-       
-                                                             
-
 def flatten(d, parent="", sep="."):
-    """Уплощает вложенные dict для записи в плоскую структуру."""
     items = {}
     for k, v in d.items():
         new = f"{parent}{sep}{k}" if parent else k
