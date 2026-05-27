@@ -19,9 +19,7 @@ def check(name, ok, details=""):
 
 
 def main():
-    print("=" * 60)
     print("  PRE-FLIGHT CHECK")
-    print("=" * 60)
     all_ok = True
 
          
@@ -140,12 +138,11 @@ def main():
         all_ok = False
 
            
-    print("\n" + "=" * 60)
+    print()
     if all_ok:
         print(f"  {OK}  Всё готово")
     else:
         print(f"  {FAIL}  Есть проблемы")
-    print("=" * 60)
 
     return 0 if all_ok else 1
 

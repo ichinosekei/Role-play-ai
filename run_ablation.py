@@ -430,20 +430,17 @@ new Chart(document.getElementById('lossChart'), {{
 
 def main():
     start = datetime.now()
-    print("═" * 60)
     print("  ABLATION STUDY")
     print(f"  Старт: {start.strftime('%Y-%m-%d %H:%M')}")
     print(f"  Экспериментов: {len(ABLATIONS)}")
     print(f"  Ожидаемое время: ~{4*len(ABLATIONS)}-{5*len(ABLATIONS)} часов")
-    print("═" * 60)
 
     prepare_data_with_sources()
 
     all_results = []
     for i, ab in enumerate(ABLATIONS):
-        print(f"\n{'─' * 60}")
+        print()
         print(f"[{i+1}/{len(ABLATIONS)}] {ab['name']} — {ab['desc']}")
-        print(f"{'─' * 60}")
         r = run_one(ab)
         all_results.append(r)
 
@@ -460,12 +457,11 @@ def main():
     end = datetime.now()
     total = end - start
     successful = [r for r in all_results if r["status"] == "success"]
-    print(f"\n{'═' * 60}")
+    print()
     print(f"  ABLATION ЗАВЕРШЕН")
     print(f"  Время: {total}")
     print(f"  Успешно: {len(successful)}/{len(ABLATIONS)}")
     print(f"  Отчёт: results/ablation_report.html")
-    print(f"{'═' * 60}")
 
     with open("ABLATION_DONE.txt", "w") as f:
         f.write(f"Done: {end}\nDuration: {total}\nSuccess: {len(successful)}/{len(ABLATIONS)}\n")

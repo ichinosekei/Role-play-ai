@@ -167,12 +167,10 @@ def main():
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
 
-    print("=" * 60)
     print(f"  Старт: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"  Модель: {cfg.model_name}")
     print(f"  Контекст: {cfg.max_seq_length}, batch: {cfg.batch_size}{cfg.gradient_accumulation}")
     print(f"  VRAM лимит: warn={cfg.vram_warn_gb}GB, abort={cfg.vram_abort_gb}GB")
-    print("=" * 60)
 
                
     print(f"\n[1/5] Загрузка модели...")
@@ -268,7 +266,6 @@ def main():
 
               
     print(f"\n[5/5] СТАРТ")
-    print("=" * 60)
 
     resume_from = None
     if args.resume:
@@ -283,11 +280,11 @@ def main():
     duration = time.time() - start
 
            
-    print(f"\n{'' * 60}")
+    print()
     print(f"  Завершено за {timedelta(seconds=int(duration))}")
     print(f"  Train loss: {stats.training_loss:.4f}")
     print(f"  Peak VRAM:  {vram_cb.peak_gb:.1f}GB")
-    print(f"{'' * 60}\n")
+    print()
 
                     
     print("Сохраняем финальный LoRA...")

@@ -451,9 +451,7 @@ td {{ padding:8px; border-bottom:0.5px solid #e5e3dd; }}
 
 
 def main():
-    print("═" * 60)
     print(f"  DATASET ANALYTICS (sample {SAMPLE_SIZE} from each)")
-    print("═" * 60)
 
     parsers = {
         "PIPPA": parse_pippa,
@@ -481,11 +479,9 @@ def main():
 
     generate_html(results)
 
-    print("\n" + "═" * 60)
+    print()
     print("  СВОДКА")
-    print("═" * 60)
     print(f"{'Dataset':<20} {'Tokens':>8} {'Turns':>6} {'Words':>6} {'NSFW':>6}")
-    print("─" * 60)
     for r in results:
         ams = r["assistant_message_stats"]
         print(f"{r['name']:<20} "

@@ -38,9 +38,7 @@ import numpy as np
 
 def evaluate_model(model_name, save_path, max_seq=4096):
     """Прогоняет полный набор метрик на модели."""
-    print(f"\n{'='*60}")
     print(f"  Оцениваем: {model_name}")
-    print(f"{'='*60}")
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
@@ -121,9 +119,7 @@ def main():
     with open("results/eval_full.json", encoding="utf-8") as f:
         our_results = json.load(f)
 
-    print(f"\n{'='*60}")
     print("  СРАВНЕНИЕ: Base Qwen vs Наша модель")
-    print(f"{'='*60}")
 
     def gv(d, *path):
         for p in path:
@@ -149,7 +145,7 @@ def main():
 
     rows = []
     print(f"\n{'Метрика':<18} {'Base':>10} {'Ours':>10} {'Δ':>12} {'?':>3}")
-    print('-'*60)
+    print()
     for name, path, direction in comparisons:
         bv = gv(base_results, *path)
         ov = gv(our_results, *path)

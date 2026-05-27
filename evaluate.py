@@ -606,9 +606,7 @@ def flatten(d, parent="", sep="."):
 
 
 def main():
-    print("=" * 60)
     print("  ПОЛНАЯ ОЦЕНКА")
-    print("=" * 60)
 
             
     print(f"\nЗагружаем {LORA_PATH}...")
@@ -697,9 +695,8 @@ def main():
     generate_html(results)
 
           
-    print("\n" + "=" * 60)
+    print()
     print("  ИТОГИ")
-    print("=" * 60)
     print(f"  Perplexity:      {results['perplexity_overall'].get('perplexity', ''):.2f}")
     print(f"  BERTScore F1:    {results['reference_metrics'].get('bertscore_f1', 0):.4f}")
     print(f"  Style Match:     {results['style_match_score']:.4f}")

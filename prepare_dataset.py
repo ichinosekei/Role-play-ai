@@ -224,9 +224,7 @@ def load_claude(target_n):
 
 
 def main():
-    print("" * 60)
     print(f"  ПОДГОТОВКА SFW RP ДАТАСЕТА (target: {TARGET_SAMPLES})")
-    print("" * 60)
 
     targets = {k: int(TARGET_SAMPLES * v) for k, v in MIX_RATIOS.items()}
     for k, n in targets.items():
