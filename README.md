@@ -4,6 +4,18 @@ Fine-tuned LoRA (Qwen2.5-32B, Unsloth) для текстового ролево�
 
 Веса и токенизатор на Hugging Face Hub: [svyatsharov/Role-play-ai](https://huggingface.co/svyatsharov/Role-play-ai).
 
+## Reproducibility
+
+```bash
+bash setup.sh
+python preflight_check.py
+python prepare_dataset.py
+python train.py
+python evaluate.py
+python compare_with_baseline.py
+python run_ablation.py
+```
+
 ## Пример использования модели
 
 Нужны GPU и окружение с **Unsloth**, **torch** и зависимостями проекта (как при обучении).
