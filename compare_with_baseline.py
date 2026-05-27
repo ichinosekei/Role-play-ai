@@ -1,8 +1,6 @@
 """
 Сравнение базовой `Qwen/Qwen2.5-32B-Instruct` и дообученной модели (LoRA).
 
-Требует много VRAM (в идеале A100 40–80GB).
-
 Если нужно вынести HF cache:
   export HF_HOME=/mnt/data/hf_cache
   export TRANSFORMERS_CACHE=/mnt/data/hf_cache
@@ -166,9 +164,9 @@ def main():
         delta_pct = 100 * delta / abs(bv) if bv != 0 else 0
 
         if direction == "lower":
-            better = "✓" if delta < 0 else "✗"
+            better = "V" if delta < 0 else "X"
         else:
-            better = "✓" if delta > 0 else "✗"
+            better = "V" if delta > 0 else "X"
 
         print(f"{name:<18} {bv:>10.4f} {ov:>10.4f} {delta:>+10.4f}({delta_pct:+5.1f}%) {better}")
         rows.append((name, bv, ov, delta, delta_pct, direction))
@@ -192,12 +190,8 @@ def main():
     with open("results/baseline_comparison_table.tex", "w", encoding="utf-8") as f:
         f.write(latex)
 
-    print(f"\n✓ JSON: results/comparison_base_vs_ours.json")
-    print(f"✓ LaTeX-таблица: results/baseline_comparison_table.tex")
-    print(f"\nДля отчёта:")
-    print(f"  1. Скопируй содержимое baseline_comparison_table.tex")
-    print(f"  2. Вставь в report.tex в раздел 5.3 Baselines")
-    print(f"  3. Замени фразу 'Не было выполнено в рамках текущей итерации' на ссылку на эту таблицу")
+    print(f"\n JSON: results/comparison_base_vs_ours.json")
+    print(f" LaTeX-таблица: results/baseline_comparison_table.tex")
 
 
 if __name__ == "__main__":

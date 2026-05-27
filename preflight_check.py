@@ -45,7 +45,7 @@ def main():
     try:
         import psutil
         ram = psutil.virtual_memory().total / 1e9
-        check(f"RAM  120GB (для лимита ментора 120-140GB)",
+        check(f"RAM  120GB",
               ram >= 120, f"{ram:.0f}GB")
         check(f"CPU  16", psutil.cpu_count() >= 16, f"{psutil.cpu_count()} ядер")
     except ImportError:
@@ -110,7 +110,7 @@ def main():
             all_ok = False
 
                  
-    print("\n[5/6] Тест загрузки Qwen2.5-32B (~10 минут, скачает ~16GB)")
+    print("\n[5/6] Тест загрузки Qwen2.5-32B")
     try:
         import torch
         from unsloth import FastLanguageModel
@@ -123,7 +123,7 @@ def main():
         peak = torch.cuda.max_memory_allocated() / 1e9
         check("Модель загружена", True, f"VRAM: {peak:.1f}GB")
         all_ok &= check("VRAM в лимите 60GB при загрузке", peak < 25,
-                        f"{peak:.1f}GB (норма: ~17-20GB при load)")
+                        f"{peak:.1f}GB")
 
                        
         FastLanguageModel.for_inference(model)
@@ -137,10 +137,6 @@ def main():
         torch.cuda.empty_cache()
     except Exception as e:
         print(f"  {FAIL}  Ошибка: {e}")
-        if "-lcuda" in str(e) or "cannot find -lcuda" in str(e):
-            print("     Подсказка: линкер не видит libcuda.so.")
-            print("     Запусти `./setup.sh` заново (он создаёт symlink в venv/lib).")
-            print("     Либо вручную добавь путь драйвера в LD_LIBRARY_PATH/LIBRARY_PATH.")
         all_ok = False
 
            

@@ -17,7 +17,7 @@ import numpy as np
 from hf_dataset_utils import load_hf_train, load_pippa_train_split
 
 random.seed(42)
-SAMPLE_SIZE = 5000              # сколько примеров берём из каждого датасета для анализа
+SAMPLE_SIZE = 5000
 TOKENIZER_NAME = "Qwen/Qwen2.5-32B-Instruct"
 
 OUTPUT_DIR = Path("results")
@@ -38,7 +38,7 @@ NSFW_RE = re.compile(
 
 
 def detect_lang(text):
-    """Простой детектор: cyrillic → ru, иначе → en."""
+    """Простой детектор: cyrillic => ru, иначе => en."""
     if not text:
         return "unknown"
     cyr = sum(1 for c in text if 'а' <= c.lower() <= 'я')
@@ -156,7 +156,7 @@ def parse_limarp(n_samples):
     try:
         ds = load_hf_train("lemonilia/LimaRP")
     except Exception as e:
-        print(f"    ⚠ LimaRP недоступен: {e}")
+        print(f"     LimaRP недоступен: {e}")
         return []
 
     indices = random.sample(range(len(ds)), min(n_samples, len(ds)))
@@ -444,17 +444,6 @@ td {{ padding:8px; border-bottom:0.5px solid #e5e3dd; }}
 <h2>Детально по каждому датасету</h2>
 {cards_html}
 
-<h2>Что делать с этими данными</h2>
-<div class="warn">
-<strong>Признаки которые надо учесть:</strong>
-<ul style="margin-left:1.2rem;margin-top:6px">
-  <li>Если в датасете много NSFW при SFW-цели — добавь жёсткий фильтр</li>
-  <li>Если средняя длина сильно различается — после микса модель будет копировать самый длинный</li>
-  <li>Если язык не совпадает с целевым — поменяй пропорции</li>
-  <li>Высокий *action* rate в assistant = narrative RP стиль (не casual)</li>
-</ul>
-</div>
-
 </body></html>"""
 
     with open(OUTPUT_DIR / "dataset_analytics.html", "w", encoding="utf-8") as f:
@@ -479,12 +468,12 @@ def main():
         try:
             dialogues = parser(SAMPLE_SIZE)
             if not dialogues:
-                print(f"  ⚠ Пропускаем — нет данных")
+                print(f"   Пропускаем — нет данных")
                 continue
             stats = analyze_dataset(name, dialogues)
             results.append(stats)
         except Exception as e:
-            print(f"  ✗ Ошибка: {e}")
+            print(f"   Ошибка: {e}")
             continue
 
     with open(OUTPUT_DIR / "dataset_analytics.json", "w", encoding="utf-8") as f:
@@ -505,8 +494,8 @@ def main():
               f"{ams.get('n_words', {}).get('mean', 0):>6.0f} "
               f"{ams.get('n_nsfw', {}).get('mean', 0):>6.2f}")
 
-    print(f"\n✓ JSON: results/dataset_analytics.json")
-    print(f"✓ HTML: results/dataset_analytics.html")
+    print(f"\n JSON: results/dataset_analytics.json")
+    print(f" HTML: results/dataset_analytics.html")
 
 
 if __name__ == "__main__":

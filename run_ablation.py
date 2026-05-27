@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Исключающее исследование: 5 экспериментов на Qwen2.5-7B, каждый раз
 исключая один источник данных. После прогона — `results/ablation_report.html`.
@@ -22,9 +21,9 @@ from transformers import EarlyStoppingCallback
 
 SMALL_MODEL = "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
 MAX_SEQ = 2048
-SAMPLES_PER_DATASET = 8000        # уменьшаем чтобы экспы были по 4-5 часов
-EPOCHS = 1                        # одной эпохи достаточно для сравнения
-SAFE_MAX_SEQ = 1536               # fallback для OOM/cuDNN
+SAMPLES_PER_DATASET = 8000
+EPOCHS = 1
+SAFE_MAX_SEQ = 1536
 
 ABLATIONS = [
     {"name": "exp_full",      "exclude": None,       "desc": "Полный микс (baseline)"},
@@ -49,7 +48,7 @@ def prepare_data_with_sources():
     """Готовит датасет, помеченный источником каждого примера."""
     sources_path = Path("data/train_with_sources")
     if sources_path.exists():
-        print("✓ Данные с метками уже готовы")
+        print(" Данные с метками уже готовы")
         return
 
     print("Готовим данные с метками источников...")
@@ -226,13 +225,13 @@ def run_one(ablation):
                 result["status"] = "success"
                 result["duration_hours"] = (time.time() - start) / 3600
 
-                print(f"  ✓ {name}: PPL={result['perplexity']:.2f}, "
+                print(f"   {name}: PPL={result['perplexity']:.2f}, "
                       f"VRAM={result['peak_vram_gb']:.1f}GB, "
                       f"time={result['duration_hours']:.1f}h")
                 break
             except Exception as inner_e:
                 last_error = inner_e
-                print(f"  ✗ Попытка {cfg['label']} не удалась: {inner_e}")
+                print(f"   Попытка {cfg['label']} не удалась: {inner_e}")
                 should_retry = idx < len(attempts) and _is_recoverable_runtime_error(inner_e)
                 try:
                     del trainer
@@ -256,7 +255,7 @@ def run_one(ablation):
     except Exception as e:
         result["error"] = str(e)[:200]
         result["duration_hours"] = (time.time() - start) / 3600
-        print(f"  ✗ {name}: {e}")
+        print(f"   {name}: {e}")
 
     finally:
         try:
@@ -290,9 +289,9 @@ def generate_report(all_results):
                 delta = ppl - baseline["perplexity"]
                 delta_pct = 100 * delta / baseline["perplexity"]
                 if delta > 0.5:
-                    impact = f'<span style="color:#1D9E75">PPL ↑ {delta:+.2f} ({delta_pct:+.1f}%) — датасет ВАЖЕН</span>'
+                    impact = f'<span style="color:#1D9E75">PPL ^ {delta:+.2f} ({delta_pct:+.1f}%) — датасет ВАЖЕН</span>'
                 elif delta < -0.5:
-                    impact = f'<span style="color:#D85A30">PPL ↓ {delta:+.2f} ({delta_pct:+.1f}%) — датасет МЕШАЕТ</span>'
+                    impact = f'<span style="color:#D85A30">PPL v {delta:+.2f} ({delta_pct:+.1f}%) — датасет МЕШАЕТ</span>'
                 else:
                     impact = f'<span style="color:#888">PPL {delta:+.2f} ({delta_pct:+.1f}%) — нейтрально</span>'
             else:
@@ -336,7 +335,7 @@ def generate_report(all_results):
             elif delta_pct < -3:
                 recs.append(f"<li><strong>{ds_name}</strong> возможно вреден: без него PPL УЛУЧШАЕТСЯ на {-delta_pct:.1f}%. Рассмотри фильтрацию или удаление.</li>")
             else:
-                recs.append(f"<li><strong>{ds_name}</strong> малозначим (Δ {delta_pct:+.1f}%): можно оставить или убрать без последствий</li>")
+                recs.append(f"<li><strong>{ds_name}</strong> малозначим (дельта {delta_pct:+.1f}%): можно оставить или убрать без последствий</li>")
         recs_html = "<ul>" + "".join(recs) + "</ul>"
     else:
         recs_html = "Baseline (exp_full) не отработал — выводов нет."
@@ -371,9 +370,7 @@ li {{ margin:0.4rem 0; }}
 </div>
 
 <div class="warn">
-<strong>Как читать:</strong> exp_full — baseline. Остальные исключают по одному датасету.
-Если PPL без датасета сильно растёт → датасет важен. Если падает → датасет мешает (мусор/шум).
-Изменения < 3% — статистически незначимы для одной эпохи.
+exp_full — baseline.
 </div>
 
 <h2>Сравнительная таблица</h2>

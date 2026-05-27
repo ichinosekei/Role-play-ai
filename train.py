@@ -1,20 +1,5 @@
-                      
 """
-
-  TRAINING  Qwen2.5-32B-Instruct, SFW RP
-
-
-Конфиг под 60GB VRAM лимит (20GB запас):
-   Контекст:  6144 (покрывает 99% RP-диалогов)
-   Батч:      2  8 grad_accum = 16 effective
-   LoRA:      r=64, alpha=128
-   Эпохи:     3 + early stopping
-   LR:        1e-4 cosine
-
-Запуск:
-    python train.py                    # с нуля
-    python train.py --resume           # продолжить
-    nohup python train.py > train.log 2>&1 &
+TRAINING  Qwen2.5-32B-Instruct, SFW RP
 """
 
 import os
@@ -59,8 +44,7 @@ class Config:
     optim = "adamw_8bit"
     max_grad_norm = 1.0
 
-                   
-    # Disk-safe defaults for smaller VM volumes.
+
     eval_steps = 500
     save_steps = 1000
     save_total_limit = 2
@@ -220,7 +204,7 @@ def main():
                
     print(f"\n[3/5] Загружаем датасет...")
     if not Path("data/train").exists():
-        print("   data/train не найден. Запусти: python prepare_dataset.py")
+        print("   data/train не найден")
         sys.exit(1)
     train_ds = load_from_disk("data/train")
     eval_ds = load_from_disk("data/eval")
@@ -284,7 +268,6 @@ def main():
 
               
     print(f"\n[5/5] СТАРТ")
-    print(f"  TensorBoard: tensorboard --logdir {cfg.logging_dir}")
     print("=" * 60)
 
     resume_from = None
@@ -338,9 +321,8 @@ def main():
         f.write(f"Eval loss: {final_eval['eval_loss']:.4f}\n")
         f.write(f"PPL: {math.exp(final_eval['eval_loss']):.2f}\n")
         f.write(f"Peak VRAM: {vram_cb.peak_gb:.1f}GB\n")
-        f.write(f"\nNext: python evaluate.py\n")
 
-    print("\n Готово. Запусти: python evaluate.py")
+    print("\n Готово")
 
 
 if __name__ == "__main__":

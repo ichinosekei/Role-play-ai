@@ -499,7 +499,7 @@ def generate_html(results):
       <tr><td>chrF++</td><td>{m('reference_metrics.chrf++')}</td><td>&gt; 25</td></tr>
     </table>
 
-    <h3>Group 3  Style match (Albert)</h3>
+    <h3>Group 3  Style match</h3>
     <table>
       <tr><th>Метрика</th><th>Reference</th><th>Model</th><th>Diff</th></tr>
     """
